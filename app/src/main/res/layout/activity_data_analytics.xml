@@ -8,18 +8,6 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="NetIndicator"
+        android:text="Data Analytics"
         android:textSize="24sp" />
-        
-    <Button
-        android:id="@+id/btnSettings"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Settings" />
-        
-    <Button
-        android:id="@+id/btnAnalytics"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Data Analytics" />
 </LinearLayout>
