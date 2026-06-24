@@ -3,17 +3,17 @@ plugins {
 }
 
 android {
-    namespace 'com.my.netindicator'  // <-- YE PACKAGE NAME HONA CHAHIYE
-    compileSdk 34
-
+    namespace 'com.my.netindicator'
+    compileSdk 33
+    
     defaultConfig {
         applicationId "com.my.netindicator"
         minSdk 24
-        targetSdk 34
+        targetSdk 33
         versionCode 1
         versionName "1.0"
     }
-
+    
     buildTypes {
         release {
             minifyEnabled false
@@ -27,12 +27,6 @@ android {
 }
 
 dependencies {
-    implementation('androidx.appcompat:appcompat:1.6.1') {
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-    }
-    implementation('androidx.core:core:1.12.0') {
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
-        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
-    }
+    // Only core dependency - no appcompat to avoid Kotlin conflict
+    implementation 'androidx.core:core:1.10.1'
 }
