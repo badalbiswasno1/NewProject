@@ -1,5 +1,4 @@
 package com.badal.downloader;
-
 public class LinkDetector {
     public static String detect(String url) {
         String lower = url.toLowerCase();
@@ -11,7 +10,6 @@ public class LinkDetector {
         if (lower.contains("threads.net")) return "THREADS";
         return null;
     }
-
     public static boolean isValidLink(String url) {
         return detect(url) != null;
     }

@@ -1,5 +1,4 @@
 package com.badal.downloader;
-
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -7,27 +6,22 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import java.util.ArrayList;
 import java.util.List;
-
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "downloader.db";
     private static final int DB_VERSION = 1;
     private static final String TABLE = "queue";
-
     public DatabaseHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
     }
-
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE " + TABLE + " (id INTEGER PRIMARY KEY AUTOINCREMENT, link TEXT UNIQUE, platform TEXT, status TEXT)");
     }
-
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         db.execSQL("DROP TABLE IF EXISTS " + TABLE);
         onCreate(db);
     }
-
     public void addLink(DownloadItem item) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues cv = new ContentValues();
@@ -37,7 +31,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.insertWithOnConflict(TABLE, null, cv, SQLiteDatabase.CONFLICT_IGNORE);
         db.close();
     }
-
     public List<DownloadItem> getAllLinks() {
         List<DownloadItem> list = new ArrayList<>();
         SQLiteDatabase db = this.getReadableDatabase();
@@ -54,7 +47,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return list;
     }
-
     public boolean linkExists(String link) {
         SQLiteDatabase db = this.getReadableDatabase();
         Cursor cursor = db.rawQuery("SELECT 1 FROM " + TABLE + " WHERE link=?", new String[]{link});
@@ -63,7 +55,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return exists;
     }
-
     public void updateStatus(int id, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues cv = new ContentValues();
@@ -71,7 +62,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.update(TABLE, cv, "id=?", new String[]{String.valueOf(id)});
         db.close();
     }
-
     public void clearAll() {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE, null, null);

@@ -1,5 +1,4 @@
 package com.badal.downloader;
-
 import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.Context;
@@ -19,7 +18,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.List;
-
 public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private QueueAdapter adapter;
@@ -27,33 +25,26 @@ public class MainActivity extends AppCompatActivity {
     private EditText linkInput;
     private DatabaseHelper db;
     private Handler clipboardHandler;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         db = new DatabaseHelper(this);
         queueList = db.getAllLinks();
-
         linkInput = findViewById(R.id.linkInput);
         recyclerView = findViewById(R.id.recyclerView);
         Button addBtn = findViewById(R.id.addBtn);
         Button downloadAllBtn = findViewById(R.id.downloadAllBtn);
         Button clearBtn = findViewById(R.id.clearBtn);
-
         adapter = new QueueAdapter(queueList);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
-
         addBtn.setOnClickListener(v -> addLink());
         downloadAllBtn.setOnClickListener(v -> startBatchDownload());
         clearBtn.setOnClickListener(v -> clearQueue());
-
         clipboardHandler = new Handler(Looper.getMainLooper());
         clipboardHandler.postDelayed(clipboardRunnable, 1000);
     }
-
     private Runnable clipboardRunnable = new Runnable() {
         @Override
         public void run() {
@@ -61,7 +52,6 @@ public class MainActivity extends AppCompatActivity {
             clipboardHandler.postDelayed(this, 2000);
         }
     };
-
     private void checkClipboard() {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         if (clipboard.hasPrimaryClip()) {
@@ -75,20 +65,17 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
     private void addLink() {
         String link = linkInput.getText().toString().trim();
         if (link.isEmpty()) {
             Toast.makeText(this, "Paste a link first!", Toast.LENGTH_SHORT).show();
             return;
         }
-
         String platform = LinkDetector.detect(link);
         if (platform == null) {
             Toast.makeText(this, "Unsupported link!", Toast.LENGTH_SHORT).show();
             return;
         }
-
         DownloadItem item = new DownloadItem(link, platform, "PENDING");
         db.addLink(item);
         queueList.add(item);
@@ -96,13 +83,11 @@ public class MainActivity extends AppCompatActivity {
         linkInput.setText("");
         Toast.makeText(this, platform + " link added!", Toast.LENGTH_SHORT).show();
     }
-
     private void startBatchDownload() {
         if (queueList.isEmpty()) {
             Toast.makeText(this, "Queue is empty!", Toast.LENGTH_SHORT).show();
             return;
         }
-
         int pendingCount = 0;
         for (DownloadItem item : queueList) {
             if (item.getStatus().equals("PENDING")) {
@@ -114,21 +99,18 @@ public class MainActivity extends AppCompatActivity {
                 pendingCount++;
             }
         }
-
         if (pendingCount > 0) {
             Toast.makeText(this, "Downloading " + pendingCount + " items...", Toast.LENGTH_LONG).show();
         } else {
             Toast.makeText(this, "All done!", Toast.LENGTH_SHORT).show();
         }
     }
-
     private void clearQueue() {
         db.clearAll();
         queueList.clear();
         adapter.notifyDataSetChanged();
         Toast.makeText(this, "Queue cleared!", Toast.LENGTH_SHORT).show();
     }
-
     public void updateItemStatus(int id, String status) {
         for (int i = 0; i < queueList.size(); i++) {
             if (queueList.get(i).getId() == id) {
@@ -138,33 +120,27 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
         clipboardHandler.removeCallbacks(clipboardRunnable);
     }
-
     class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHolder> {
         private List<DownloadItem> items;
-
         QueueAdapter(List<DownloadItem> items) {
             this.items = items;
         }
-
         @Override
         public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
             View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_queue, parent, false);
             return new ViewHolder(view);
         }
-
         @Override
         public void onBindViewHolder(ViewHolder holder, int position) {
             DownloadItem item = items.get(position);
             holder.platformText.setText(item.getPlatform());
             holder.linkText.setText(item.getLink());
             holder.statusText.setText(item.getStatus());
-
             int color;
             switch (item.getStatus()) {
                 case "PENDING": color = 0xFF9E9E9E; break;
@@ -175,15 +151,12 @@ public class MainActivity extends AppCompatActivity {
             }
             holder.statusText.setTextColor(color);
         }
-
         @Override
         public int getItemCount() {
             return items.size();
         }
-
         class ViewHolder extends RecyclerView.ViewHolder {
             TextView platformText, linkText, statusText;
-
             ViewHolder(View itemView) {
                 super(itemView);
                 platformText = itemView.findViewById(R.id.platformText);
