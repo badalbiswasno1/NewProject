@@ -24,6 +24,7 @@ public class FloatingPetService extends Service {
     private ImageView petImage;
     private DatabaseHelper db;
     private Handler clipboardHandler;
+    private Handler colourHandler;
     private String lastDetectedLink = "";
     private WindowManager.LayoutParams params;
     private float initialX;
@@ -39,6 +40,7 @@ public class FloatingPetService extends Service {
         SharedPreferences prefs = getSharedPreferences("PetSettings", MODE_PRIVATE);
         petSize = prefs.getInt("size", 120);
         clipboardHandler = new Handler(Looper.getMainLooper());
+        colourHandler = new Handler(Looper.getMainLooper());
         createFloatingWindow();
         startClipboardMonitor();
     }
@@ -103,23 +105,38 @@ public class FloatingPetService extends Service {
             ClipData clip = clipboard.getPrimaryClip();
             if (clip != null && clip.getItemCount() > 0) {
                 String text = clip.getItemAt(0).getText().toString();
-                if (LinkDetector.isValidLink(text) && !text.equals(lastDetectedLink) && !db.linkExists(text)) {
-                    lastDetectedLink = text;
-                    autoAddLink(text);
+                if (text.equals(lastDetectedLink)) return;
+                lastDetectedLink = text;
+                if (LinkDetector.isValidLink(text)) {
+                    if (!db.linkExists(text)) {
+                        autoAddLink(text);
+                    }
+                } else if (isUrl(text)) {
+                    showInvalidLink();
                 }
             }
         }
+    }
+    private boolean isUrl(String text) {
+        return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("www.");
     }
     private void autoAddLink(String link) {
         petImage.setImageResource(R.drawable.pet_alert);
         String platform = LinkDetector.detect(link);
         DownloadItem item = new DownloadItem(link, platform, "PENDING");
         db.addLink(item);
-        Toast.makeText(this, platform + " auto-added! Tap pet to open app", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, platform + " auto-added!", Toast.LENGTH_SHORT).show();
         petImage.setImageResource(R.drawable.pet_success);
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+        colourHandler.postDelayed(() -> {
             petImage.setImageResource(R.drawable.pet_normal);
         }, 2000);
+    }
+    private void showInvalidLink() {
+        petImage.setImageResource(R.drawable.pet_invalid);
+        Toast.makeText(this, "Not a video link!", Toast.LENGTH_SHORT).show();
+        colourHandler.postDelayed(() -> {
+            petImage.setImageResource(R.drawable.pet_normal);
+        }, 1500);
     }
     private void onPetClick() {
         Intent intent = new Intent(this, MainActivity.class);
@@ -145,6 +162,7 @@ public class FloatingPetService extends Service {
             windowManager.removeView(floatingView);
         }
         clipboardHandler.removeCallbacksAndMessages(null);
+        colourHandler.removeCallbacksAndMessages(null);
     }
     @Nullable
     @Override
