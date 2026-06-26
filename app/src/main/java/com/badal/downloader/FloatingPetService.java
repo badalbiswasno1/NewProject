@@ -25,8 +25,8 @@ public class FloatingPetService extends Service {
     private Handler clipboardHandler;
     private String lastDetectedLink = "";
     private WindowManager.LayoutParams params;
-    private float initialX;
-    private float initialY;
+    private int initialX;
+    private int initialY;
     private float initialTouchX;
     private float initialTouchY;
     @Override
