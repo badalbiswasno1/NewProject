@@ -2,24 +2,81 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#F5F5F5">
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="NetIndicator"
-        android:textSize="24sp" />
-        
-    <Button
-        android:id="@+id/btnSettings"
-        android:layout_width="wrap_content"
+        android:text="Queue Downloader"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#6200EE"
+        android:gravity="center"
+        android:padding="8dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Settings" />
-        
-    <Button
-        android:id="@+id/btnAnalytics"
-        android:layout_width="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/linkInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Paste link here..."
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text" />
+
+        <Button
+            android:id="@+id/addBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ADD"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Data Analytics" />
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="8dp">
+
+        <Button
+            android:id="@+id/downloadAllBtn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="DOWNLOAD ALL"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/clearBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CLEAR"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="#F44336"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Queue"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginTop="16dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp" />
+
 </LinearLayout>
