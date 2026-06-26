@@ -24,7 +24,8 @@ public class DownloadService extends IntentService {
         try {
             String termuxCmd = "am startservice -n com.termux/com.termux.app.TermuxService -a com.termux.RUN_COMMAND --es com.termux.RUN_COMMAND_PATH /data/data/com.termux/files/usr/bin/yt-dlp --esa com.termux.RUN_COMMAND_ARGUMENTS '-o,/storage/emulated/0/Download/%(title)s.%(ext)s," + link + "'";
             Runtime.getRuntime().exec(termuxCmd);
-            Thread.sleep(3000);
+            Thread.sleep(5000);
+            db.addDownloaded(link, platform, "Video_" + System.currentTimeMillis(), "/storage/emulated/0/Download/");
             db.updateStatus(id, "DONE");
             Intent updateIntent = new Intent("DOWNLOAD_UPDATE");
             updateIntent.putExtra("id", id);

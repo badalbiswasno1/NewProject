@@ -3,9 +3,12 @@ import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,6 +16,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -25,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText linkInput;
     private DatabaseHelper db;
     private Handler clipboardHandler;
+    private boolean isPetActive = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -36,12 +41,19 @@ public class MainActivity extends AppCompatActivity {
         Button addBtn = findViewById(R.id.addBtn);
         Button downloadAllBtn = findViewById(R.id.downloadAllBtn);
         Button clearBtn = findViewById(R.id.clearBtn);
+        Button downloadedBtn = findViewById(R.id.downloadedBtn);
+        Button petToggleBtn = findViewById(R.id.petToggleBtn);
         adapter = new QueueAdapter(queueList);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
         addBtn.setOnClickListener(v -> addLink());
-        downloadAllBtn.setOnClickListener(v -> startBatchDownload());
+        downloadAllBtn.setOnClickListener(v -> showDownloadOptions());
         clearBtn.setOnClickListener(v -> clearQueue());
+        downloadedBtn.setOnClickListener(v -> {
+            Intent intent = new Intent(this, DownloadedActivity.class);
+            startActivity(intent);
+        });
+        petToggleBtn.setOnClickListener(v -> togglePet());
         clipboardHandler = new Handler(Looper.getMainLooper());
         clipboardHandler.postDelayed(clipboardRunnable, 1000);
     }
@@ -78,29 +90,54 @@ public class MainActivity extends AppCompatActivity {
         }
         DownloadItem item = new DownloadItem(link, platform, "PENDING");
         db.addLink(item);
-        queueList.add(item);
-        adapter.notifyItemInserted(queueList.size() - 1);
+        queueList.add(0, item);
+        adapter.notifyItemInserted(0);
         linkInput.setText("");
         Toast.makeText(this, platform + " link added!", Toast.LENGTH_SHORT).show();
     }
-    private void startBatchDownload() {
+    private void showDownloadOptions() {
         if (queueList.isEmpty()) {
             Toast.makeText(this, "Queue is empty!", Toast.LENGTH_SHORT).show();
             return;
         }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Download Options");
+        builder.setItems(new String[]{"Download Now", "Download Later (WiFi)", "Schedule..."}, (dialog, which) -> {
+            switch (which) {
+                case 0:
+                    startBatchDownload(false);
+                    break;
+                case 1:
+                    startBatchDownload(true);
+                    break;
+                case 2:
+                    Toast.makeText(this, "Schedule feature coming soon!", Toast.LENGTH_SHORT).show();
+                    break;
+            }
+        });
+        builder.show();
+    }
+    private void startBatchDownload(boolean wifiOnly) {
         int pendingCount = 0;
         for (DownloadItem item : queueList) {
             if (item.getStatus().equals("PENDING")) {
-                Intent intent = new Intent(this, DownloadService.class);
-                intent.putExtra("link", item.getLink());
-                intent.putExtra("platform", item.getPlatform());
-                intent.putExtra("id", item.getId());
-                startService(intent);
+                if (wifiOnly) {
+                    db.updateStatus(item.getId(), "WAITING_WIFI");
+                    item.setStatus("WAITING_WIFI");
+                } else {
+                    Intent intent = new Intent(this, DownloadService.class);
+                    intent.putExtra("link", item.getLink());
+                    intent.putExtra("platform", item.getPlatform());
+                    intent.putExtra("id", item.getId());
+                    startService(intent);
+                }
                 pendingCount++;
             }
         }
+        adapter.notifyDataSetChanged();
         if (pendingCount > 0) {
-            Toast.makeText(this, "Downloading " + pendingCount + " items...", Toast.LENGTH_LONG).show();
+            String msg = wifiOnly ? pendingCount + " items waiting for WiFi!" : "Downloading " + pendingCount + " items...";
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
         } else {
             Toast.makeText(this, "All done!", Toast.LENGTH_SHORT).show();
         }
@@ -110,6 +147,32 @@ public class MainActivity extends AppCompatActivity {
         queueList.clear();
         adapter.notifyDataSetChanged();
         Toast.makeText(this, "Queue cleared!", Toast.LENGTH_SHORT).show();
+    }
+    private void togglePet() {
+        if (!isPetActive) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, 1001);
+                return;
+            }
+            startService(new Intent(this, FloatingPetService.class));
+            isPetActive = true;
+            Toast.makeText(this, "Pet activated! Copy any link to detect.", Toast.LENGTH_SHORT).show();
+        } else {
+            stopService(new Intent(this, FloatingPetService.class));
+            isPetActive = false;
+            Toast.makeText(this, "Pet deactivated!", Toast.LENGTH_SHORT).show();
+        }
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 1001) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+                startService(new Intent(this, FloatingPetService.class));
+                isPetActive = true;
+            }
+        }
     }
     public void updateItemStatus(int id, String status) {
         for (int i = 0; i < queueList.size(); i++) {
@@ -147,6 +210,7 @@ public class MainActivity extends AppCompatActivity {
                 case "DOWNLOADING": color = 0xFF2196F3; break;
                 case "DONE": color = 0xFF4CAF50; break;
                 case "FAILED": color = 0xFFF44336; break;
+                case "WAITING_WIFI": color = 0xFFFF9800; break;
                 default: color = 0xFF9E9E9E;
             }
             holder.statusText.setTextColor(color);
