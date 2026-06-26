@@ -3,6 +3,7 @@ import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
@@ -30,11 +32,13 @@ public class MainActivity extends AppCompatActivity {
     private DatabaseHelper db;
     private Handler clipboardHandler;
     private boolean isPetActive = false;
+    private SharedPreferences prefs;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         db = new DatabaseHelper(this);
+        prefs = getSharedPreferences("PetSettings", MODE_PRIVATE);
         queueList = db.getAllLinks();
         linkInput = findViewById(R.id.linkInput);
         recyclerView = findViewById(R.id.recyclerView);
@@ -43,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
         Button clearBtn = findViewById(R.id.clearBtn);
         Button downloadedBtn = findViewById(R.id.downloadedBtn);
         Button petToggleBtn = findViewById(R.id.petToggleBtn);
+        Button petSizeBtn = findViewById(R.id.petSizeBtn);
         adapter = new QueueAdapter(queueList);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
@@ -54,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
         petToggleBtn.setOnClickListener(v -> togglePet());
+        petSizeBtn.setOnClickListener(v -> showPetSizeDialog());
         clipboardHandler = new Handler(Looper.getMainLooper());
         clipboardHandler.postDelayed(clipboardRunnable, 1000);
     }
@@ -72,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
                 String text = clip.getItemAt(0).getText().toString();
                 if (LinkDetector.isValidLink(text) && !db.linkExists(text)) {
                     linkInput.setText(text);
-                    Toast.makeText(this, "Link detected! Press ADD", Toast.LENGTH_SHORT).show();
                 }
             }
         }
@@ -157,12 +162,46 @@ public class MainActivity extends AppCompatActivity {
             }
             startService(new Intent(this, FloatingPetService.class));
             isPetActive = true;
-            Toast.makeText(this, "Pet activated! Copy any link to detect.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Pet activated! Copy any link to auto-add.", Toast.LENGTH_SHORT).show();
         } else {
             stopService(new Intent(this, FloatingPetService.class));
             isPetActive = false;
             Toast.makeText(this, "Pet deactivated!", Toast.LENGTH_SHORT).show();
         }
+    }
+    private void showPetSizeDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Pet Size");
+        View view = getLayoutInflater().inflate(R.layout.dialog_pet_size, null);
+        SeekBar seekBar = view.findViewById(R.id.sizeSeekBar);
+        TextView sizeText = view.findViewById(R.id.sizeText);
+        int currentSize = prefs.getInt("size", 120);
+        seekBar.setProgress(currentSize - 60);
+        sizeText.setText(currentSize + "px");
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int size = progress + 60;
+                sizeText.setText(size + "px");
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        builder.setView(view);
+        builder.setPositiveButton("Apply", (dialog, which) -> {
+            int newSize = seekBar.getProgress() + 60;
+            prefs.edit().putInt("size", newSize).apply();
+            if (isPetActive) {
+                Intent intent = new Intent(this, FloatingPetService.class);
+                intent.putExtra("size", newSize);
+                startService(intent);
+            }
+            Toast.makeText(this, "Pet size: " + newSize + "px", Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
     }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {

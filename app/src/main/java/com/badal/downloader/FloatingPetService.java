@@ -4,6 +4,7 @@ import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.Handler;
@@ -25,15 +26,18 @@ public class FloatingPetService extends Service {
     private Handler clipboardHandler;
     private String lastDetectedLink = "";
     private WindowManager.LayoutParams params;
-    private int initialX;
-    private int initialY;
+    private float initialX;
+    private float initialY;
     private float initialTouchX;
     private float initialTouchY;
+    private int petSize;
     @Override
     public void onCreate() {
         super.onCreate();
         db = new DatabaseHelper(this);
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        SharedPreferences prefs = getSharedPreferences("PetSettings", MODE_PRIVATE);
+        petSize = prefs.getInt("size", 120);
         clipboardHandler = new Handler(Looper.getMainLooper());
         createFloatingWindow();
         startClipboardMonitor();
@@ -41,6 +45,8 @@ public class FloatingPetService extends Service {
     private void createFloatingWindow() {
         floatingView = LayoutInflater.from(this).inflate(R.layout.floating_pet, null);
         petImage = floatingView.findViewById(R.id.petImage);
+        petImage.getLayoutParams().width = petSize;
+        petImage.getLayoutParams().height = petSize;
         int layoutType;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             layoutType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -48,8 +54,8 @@ public class FloatingPetService extends Service {
             layoutType = WindowManager.LayoutParams.TYPE_PHONE;
         }
         params = new WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            petSize,
+            petSize,
             layoutType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
@@ -66,8 +72,8 @@ public class FloatingPetService extends Service {
                     initialTouchY = event.getRawY();
                     return true;
                 case MotionEvent.ACTION_MOVE:
-                    params.x = initialX + (int)(event.getRawX() - initialTouchX);
-                    params.y = initialY + (int)(event.getRawY() - initialTouchY);
+                    params.x = (int)(initialX + event.getRawX() - initialTouchX);
+                    params.y = (int)(initialY + event.getRawY() - initialTouchY);
                     windowManager.updateViewLayout(floatingView, params);
                     return true;
                 case MotionEvent.ACTION_UP:
@@ -99,32 +105,37 @@ public class FloatingPetService extends Service {
                 String text = clip.getItemAt(0).getText().toString();
                 if (LinkDetector.isValidLink(text) && !text.equals(lastDetectedLink) && !db.linkExists(text)) {
                     lastDetectedLink = text;
-                    showLinkDetected(text);
+                    autoAddLink(text);
                 }
             }
         }
     }
-    private void showLinkDetected(String link) {
+    private void autoAddLink(String link) {
         petImage.setImageResource(R.drawable.pet_alert);
-        Toast.makeText(this, "Link detected! Tap pet to add", Toast.LENGTH_SHORT).show();
+        String platform = LinkDetector.detect(link);
+        DownloadItem item = new DownloadItem(link, platform, "PENDING");
+        db.addLink(item);
+        Toast.makeText(this, platform + " auto-added! Tap pet to open app", Toast.LENGTH_SHORT).show();
+        petImage.setImageResource(R.drawable.pet_success);
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            petImage.setImageResource(R.drawable.pet_normal);
+        }, 2000);
     }
     private void onPetClick() {
-        if (lastDetectedLink != null && !lastDetectedLink.isEmpty() && LinkDetector.isValidLink(lastDetectedLink)) {
-            String platform = LinkDetector.detect(lastDetectedLink);
-            DownloadItem item = new DownloadItem(lastDetectedLink, platform, "PENDING");
-            db.addLink(item);
-            petImage.setImageResource(R.drawable.pet_normal);
-            Toast.makeText(this, platform + " link added to queue!", Toast.LENGTH_SHORT).show();
-            lastDetectedLink = "";
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-        } else {
-            Toast.makeText(this, "No new link detected!", Toast.LENGTH_SHORT).show();
-        }
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
     }
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && intent.hasExtra("size")) {
+            petSize = intent.getIntExtra("size", 120);
+            params.width = petSize;
+            params.height = petSize;
+            petImage.getLayoutParams().width = petSize;
+            petImage.getLayoutParams().height = petSize;
+            windowManager.updateViewLayout(floatingView, params);
+        }
         return START_STICKY;
     }
     @Override
