@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity {
         Button downloadedBtn = findViewById(R.id.downloadedBtn);
         Button petToggleBtn = findViewById(R.id.petToggleBtn);
         Button petSizeBtn = findViewById(R.id.petSizeBtn);
-        adapter = new QueueAdapter(queueList);
+        adapter = new QueueAdapter(queueList, this);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
         addBtn.setOnClickListener(v -> addLink());
@@ -93,6 +93,10 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Unsupported link!", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (db.linkExists(link)) {
+            Toast.makeText(this, "Already in queue!", Toast.LENGTH_SHORT).show();
+            return;
+        }
         DownloadItem item = new DownloadItem(link, platform, "PENDING");
         db.addLink(item);
         queueList.add(0, item);
@@ -107,17 +111,11 @@ public class MainActivity extends AppCompatActivity {
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Download Options");
-        builder.setItems(new String[]{"Download Now", "Download Later (WiFi)", "Schedule..."}, (dialog, which) -> {
-            switch (which) {
-                case 0:
-                    startBatchDownload(false);
-                    break;
-                case 1:
-                    startBatchDownload(true);
-                    break;
-                case 2:
-                    Toast.makeText(this, "Schedule feature coming soon!", Toast.LENGTH_SHORT).show();
-                    break;
+        builder.setItems(new String[]{"Download Now", "Download Later (WiFi)"}, (dialog, which) -> {
+            if (which == 0) {
+                startBatchDownload(false);
+            } else {
+                startBatchDownload(true);
             }
         });
         builder.show();
@@ -125,11 +123,13 @@ public class MainActivity extends AppCompatActivity {
     private void startBatchDownload(boolean wifiOnly) {
         int pendingCount = 0;
         for (DownloadItem item : queueList) {
-            if (item.getStatus().equals("PENDING")) {
+            if (item.getStatus().equals("PENDING") || item.getStatus().equals("WAITING_WIFI")) {
                 if (wifiOnly) {
                     db.updateStatus(item.getId(), "WAITING_WIFI");
                     item.setStatus("WAITING_WIFI");
                 } else {
+                    db.updateStatus(item.getId(), "DOWNLOADING");
+                    item.setStatus("DOWNLOADING");
                     Intent intent = new Intent(this, DownloadService.class);
                     intent.putExtra("link", item.getLink());
                     intent.putExtra("platform", item.getPlatform());
@@ -162,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
             }
             startService(new Intent(this, FloatingPetService.class));
             isPetActive = true;
-            Toast.makeText(this, "Pet activated! Copy any link to auto-add.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Pet activated!", Toast.LENGTH_SHORT).show();
         } else {
             stopService(new Intent(this, FloatingPetService.class));
             isPetActive = false;
@@ -203,6 +203,57 @@ public class MainActivity extends AppCompatActivity {
         builder.setNegativeButton("Cancel", null);
         builder.show();
     }
+    public void showItemMenu(DownloadItem item, int position) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(item.getPlatform());
+        builder.setItems(new String[]{"Copy Link", "Edit Link", "Delete", "Download Now"}, (dialog, which) -> {
+            switch (which) {
+                case 0:
+                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("link", item.getLink());
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(this, "Link copied!", Toast.LENGTH_SHORT).show();
+                    break;
+                case 1:
+                    showEditDialog(item, position);
+                    break;
+                case 2:
+                    db.deleteQueueItem(item.getId());
+                    queueList.remove(position);
+                    adapter.notifyItemRemoved(position);
+                    Toast.makeText(this, "Deleted!", Toast.LENGTH_SHORT).show();
+                    break;
+                case 3:
+                    Intent intent = new Intent(this, DownloadService.class);
+                    intent.putExtra("link", item.getLink());
+                    intent.putExtra("platform", item.getPlatform());
+                    intent.putExtra("id", item.getId());
+                    startService(intent);
+                    break;
+            }
+        });
+        builder.show();
+    }
+    private void showEditDialog(DownloadItem item, int position) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Edit Link");
+        EditText input = new EditText(this);
+        input.setText(item.getLink());
+        builder.setView(input);
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            String newLink = input.getText().toString().trim();
+            if (LinkDetector.isValidLink(newLink) && !db.linkExists(newLink)) {
+                db.updateLink(item.getId(), newLink);
+                item.setLink(newLink);
+                adapter.notifyItemChanged(position);
+                Toast.makeText(this, "Updated!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Invalid or duplicate!", Toast.LENGTH_SHORT).show();
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -213,15 +264,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-    public void updateItemStatus(int id, String status) {
-        for (int i = 0; i < queueList.size(); i++) {
-            if (queueList.get(i).getId() == id) {
-                queueList.get(i).setStatus(status);
-                adapter.notifyItemChanged(i);
-                break;
-            }
-        }
-    }
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -229,8 +271,10 @@ public class MainActivity extends AppCompatActivity {
     }
     class QueueAdapter extends RecyclerView.Adapter<QueueAdapter.ViewHolder> {
         private List<DownloadItem> items;
-        QueueAdapter(List<DownloadItem> items) {
+        private MainActivity activity;
+        QueueAdapter(List<DownloadItem> items, MainActivity activity) {
             this.items = items;
+            this.activity = activity;
         }
         @Override
         public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -253,6 +297,7 @@ public class MainActivity extends AppCompatActivity {
                 default: color = 0xFF9E9E9E;
             }
             holder.statusText.setTextColor(color);
+            holder.itemView.setOnClickListener(v -> activity.showItemMenu(item, position));
         }
         @Override
         public int getItemCount() {

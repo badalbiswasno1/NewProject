@@ -25,7 +25,7 @@ public class FloatingPetService extends Service {
     private DatabaseHelper db;
     private Handler clipboardHandler;
     private Handler colourHandler;
-    private String lastDetectedLink = "";
+    private String lastProcessedText = "";
     private WindowManager.LayoutParams params;
     private float initialX;
     private float initialY;
@@ -95,21 +95,23 @@ public class FloatingPetService extends Service {
             @Override
             public void run() {
                 checkClipboard();
-                clipboardHandler.postDelayed(this, 1500);
+                clipboardHandler.postDelayed(this, 1000);
             }
-        }, 1500);
+        }, 1000);
     }
     private void checkClipboard() {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         if (clipboard.hasPrimaryClip()) {
             ClipData clip = clipboard.getPrimaryClip();
             if (clip != null && clip.getItemCount() > 0) {
-                String text = clip.getItemAt(0).getText().toString();
-                if (text.equals(lastDetectedLink)) return;
-                lastDetectedLink = text;
+                String text = clip.getItemAt(0).getText().toString().trim();
+                if (text.isEmpty() || text.equals(lastProcessedText)) return;
+                lastProcessedText = text;
                 if (LinkDetector.isValidLink(text)) {
                     if (!db.linkExists(text)) {
                         autoAddLink(text);
+                    } else {
+                        showDuplicate();
                     }
                 } else if (isUrl(text)) {
                     showInvalidLink();
@@ -125,7 +127,7 @@ public class FloatingPetService extends Service {
         String platform = LinkDetector.detect(link);
         DownloadItem item = new DownloadItem(link, platform, "PENDING");
         db.addLink(item);
-        Toast.makeText(this, platform + " auto-added!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, platform + " added to queue!", Toast.LENGTH_SHORT).show();
         petImage.setImageResource(R.drawable.pet_success);
         colourHandler.postDelayed(() -> {
             petImage.setImageResource(R.drawable.pet_normal);
@@ -134,6 +136,13 @@ public class FloatingPetService extends Service {
     private void showInvalidLink() {
         petImage.setImageResource(R.drawable.pet_invalid);
         Toast.makeText(this, "Not a video link!", Toast.LENGTH_SHORT).show();
+        colourHandler.postDelayed(() -> {
+            petImage.setImageResource(R.drawable.pet_normal);
+        }, 1500);
+    }
+    private void showDuplicate() {
+        petImage.setImageResource(R.drawable.pet_duplicate);
+        Toast.makeText(this, "Already in queue!", Toast.LENGTH_SHORT).show();
         colourHandler.postDelayed(() -> {
             petImage.setImageResource(R.drawable.pet_normal);
         }, 1500);

@@ -17,12 +17,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     @Override
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE " + TABLE_QUEUE + " (id INTEGER PRIMARY KEY AUTOINCREMENT, link TEXT UNIQUE, platform TEXT, status TEXT)");
-        db.execSQL("CREATE TABLE " + TABLE_DOWNLOADED + " (id INTEGER PRIMARY KEY AUTOINCREMENT, link TEXT, platform TEXT, title TEXT, filepath TEXT, downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+        db.execSQL("CREATE TABLE " + TABLE_DOWNLOADED + " (id INTEGER PRIMARY KEY AUTOINCREMENT, link TEXT UNIQUE, platform TEXT, title TEXT, filepath TEXT, downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
     }
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
-            db.execSQL("CREATE TABLE " + TABLE_DOWNLOADED + " (id INTEGER PRIMARY KEY AUTOINCREMENT, link TEXT, platform TEXT, title TEXT, filepath TEXT, downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            db.execSQL("CREATE TABLE " + TABLE_DOWNLOADED + " (id INTEGER PRIMARY KEY AUTOINCREMENT, link TEXT UNIQUE, platform TEXT, title TEXT, filepath TEXT, downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
         }
     }
     public void addLink(DownloadItem item) {
@@ -58,11 +58,31 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return exists;
     }
+    public boolean isDownloaded(String link) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT 1 FROM " + TABLE_DOWNLOADED + " WHERE link=?", new String[]{link});
+        boolean exists = cursor.moveToFirst();
+        cursor.close();
+        db.close();
+        return exists;
+    }
     public void updateStatus(int id, String status) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues cv = new ContentValues();
         cv.put("status", status);
         db.update(TABLE_QUEUE, cv, "id=?", new String[]{String.valueOf(id)});
+        db.close();
+    }
+    public void updateLink(int id, String newLink) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues cv = new ContentValues();
+        cv.put("link", newLink);
+        db.update(TABLE_QUEUE, cv, "id=?", new String[]{String.valueOf(id)});
+        db.close();
+    }
+    public void deleteQueueItem(int id) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        db.delete(TABLE_QUEUE, "id=?", new String[]{String.valueOf(id)});
         db.close();
     }
     public void clearAll() {
@@ -77,7 +97,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         cv.put("platform", platform);
         cv.put("title", title);
         cv.put("filepath", filepath);
-        db.insert(TABLE_DOWNLOADED, null, cv);
+        db.insertWithOnConflict(TABLE_DOWNLOADED, null, cv, SQLiteDatabase.CONFLICT_IGNORE);
         db.close();
     }
     public List<DownloadedItem> getDownloaded() {
