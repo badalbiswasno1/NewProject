@@ -11,6 +11,10 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -19,6 +23,7 @@ import org.json.JSONObject;
 public class DownloadService extends IntentService {
     private static final String TAG = "DownloadService";
     private DatabaseHelper db;
+    private File debugLogFile;
     public DownloadService() {
         super("DownloadService");
     }
@@ -34,16 +39,22 @@ public class DownloadService extends IntentService {
         String platform = intent.getStringExtra("platform");
         int id = intent.getIntExtra("id", -1);
         if (id == -1) return;
+        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "QueueDownloader");
+        dir.mkdirs();
+        debugLogFile = new File(dir, "debug.log");
         if (db.isDownloaded(link)) {
             db.updateStatus(id, "DONE");
             return;
         }
         db.updateStatus(id, "DOWNLOADING");
+        writeDebugLog("===== NEW DOWNLOAD ATTEMPT =====");
+        writeDebugLog("Link: " + link + " Platform: " + platform);
         try {
             Log.d(TAG, "Starting download for: " + link);
             String downloadUrl = getDownloadUrl(link);
             if (downloadUrl == null) {
                 Log.e(TAG, "No download URL found");
+                writeDebugLog("RESULT: FAILED - no API returned a usable URL");
                 db.updateStatus(id, "FAILED");
                 sendUpdate(id, "FAILED");
                 return;
@@ -51,8 +62,6 @@ public class DownloadService extends IntentService {
             Log.d(TAG, "Download URL: " + downloadUrl);
             String ext = downloadUrl.contains(".jpg") || downloadUrl.contains(".jpeg") ? ".jpg" : ".mp4";
             String filename = platform + "_" + System.currentTimeMillis() + ext;
-            File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "QueueDownloader");
-            dir.mkdirs();
             File file = new File(dir, filename);
             downloadFile(downloadUrl, file);
             db.addDownloaded(link, platform, filename, file.getAbsolutePath());
@@ -61,8 +70,19 @@ public class DownloadService extends IntentService {
             Log.d(TAG, "Download complete: " + file.getAbsolutePath());
         } catch (Exception e) {
             Log.e(TAG, "Download error: " + e.getMessage());
+            writeDebugLog("RESULT: FAILED - exception: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             db.updateStatus(id, "FAILED");
             sendUpdate(id, "FAILED");
+        }
+    }
+    private void writeDebugLog(String msg) {
+        try {
+            if (debugLogFile == null) return;
+            FileWriter fw = new FileWriter(debugLogFile, true);
+            String time = new SimpleDateFormat("HH:mm:ss").format(new Date());
+            fw.write("[" + time + "] " + msg + "\n");
+            fw.close();
+        } catch (IOException e) {
         }
     }
     private String getDownloadUrl(String videoUrl) {
@@ -77,6 +97,7 @@ public class DownloadService extends IntentService {
         try {
             String api = "https://fastdl.app/api/convert?url=" + URLEncoder.encode(videoUrl, "UTF-8");
             Log.d(TAG, "Trying API1: " + api);
+            writeDebugLog("API1 (fastdl): " + api);
             URL url = new URL(api);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
@@ -85,6 +106,7 @@ public class DownloadService extends IntentService {
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10)");
             int code = conn.getResponseCode();
             Log.d(TAG, "API1 response: " + code);
+            writeDebugLog("API1 response code: " + code);
             if (code != 200) return null;
             BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
             StringBuilder sb = new StringBuilder();
@@ -95,6 +117,7 @@ public class DownloadService extends IntentService {
             reader.close();
             String response = sb.toString();
             Log.d(TAG, "API1 body: " + response.substring(0, Math.min(200, response.length())));
+            writeDebugLog("API1 body: " + response.substring(0, Math.min(300, response.length())));
             JSONObject json = new JSONObject(response);
             if (json.has("url")) return json.getString("url");
             if (json.has("download_url")) return json.getString("download_url");
@@ -108,6 +131,7 @@ public class DownloadService extends IntentService {
             return null;
         } catch (Exception e) {
             Log.e(TAG, "API1 error: " + e.getMessage());
+            writeDebugLog("API1 error: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             return null;
         }
     }
@@ -115,6 +139,7 @@ public class DownloadService extends IntentService {
         try {
             String api = "https://snapxapi.com/v1/download?url=" + URLEncoder.encode(videoUrl, "UTF-8");
             Log.d(TAG, "Trying API2: " + api);
+            writeDebugLog("API2 (snapxapi): " + api);
             URL url = new URL(api);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
@@ -122,6 +147,7 @@ public class DownloadService extends IntentService {
             conn.setReadTimeout(15000);
             int code = conn.getResponseCode();
             Log.d(TAG, "API2 response: " + code);
+            writeDebugLog("API2 response code: " + code);
             if (code != 200) return null;
             BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
             StringBuilder sb = new StringBuilder();
@@ -140,12 +166,14 @@ public class DownloadService extends IntentService {
             return null;
         } catch (Exception e) {
             Log.e(TAG, "API2 error: " + e.getMessage());
+            writeDebugLog("API2 error: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             return null;
         }
     }
     private String tryApi3(String videoUrl) {
         try {
             Log.d(TAG, "Trying API3");
+            writeDebugLog("API3 (save-from): https://save-from.net/api/convert");
             URL url = new URL("https://save-from.net/api/convert");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -160,6 +188,7 @@ public class DownloadService extends IntentService {
             os.close();
             int code = conn.getResponseCode();
             Log.d(TAG, "API3 response: " + code);
+            writeDebugLog("API3 response code: " + code);
             if (code != 200) return null;
             BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
             StringBuilder sb = new StringBuilder();
@@ -175,6 +204,7 @@ public class DownloadService extends IntentService {
             return null;
         } catch (Exception e) {
             Log.e(TAG, "API3 error: " + e.getMessage());
+            writeDebugLog("API3 error: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             return null;
         }
     }
