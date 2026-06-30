@@ -23,7 +23,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".DownloadedActivity"
-            android:label="Downloaded Videos" />
+            android:label="Downloaded Videos"
+            android:launchMode="singleTop" />
         <service android:name=".DownloadService"
             android:enabled="true"
             android:exported="false" />

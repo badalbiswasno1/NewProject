@@ -47,6 +47,14 @@ public class DownloadedActivity extends AppCompatActivity {
     private void updateCount() {
         countText.setText("Total: " + downloadedList.size() + " / 500");
     }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        downloadedList.clear();
+        downloadedList.addAll(db.getDownloaded());
+        adapter.notifyDataSetChanged();
+        updateCount();
+    }
     class DownloadedAdapter extends RecyclerView.Adapter<DownloadedAdapter.ViewHolder> {
         private List<DownloadedItem> items;
         DownloadedAdapter(List<DownloadedItem> items) {
